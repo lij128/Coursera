@@ -1,0 +1,220 @@
+---
+title: "Coursera 05 Reproducible Research"
+author: "Jun Li <jun.li3@bms.com>"
+fontsize: 10pt
+output:
+  pdf_document:
+    fig_height: 5
+    fig_width: 7
+    number_sections: yes
+    toc: yes
+    toc_depth: 4
+  html_document:
+    toc: yes
+header-includes:
+- \usepackage{fancyhdr}
+- \usepackage{graphicx}
+- \pagestyle{fancy}
+- \fancyhead[LE,RO]{}
+- \fancyhead[CO,CE]{\textit{BMS Highly Confidential - For internal purposes only}}
+- \fancyfoot[CO,CE]{\textit{BMS Highly Confidential - For internal purposes only}}
+- \fancyfoot[LE,RO]{\thepage}
+Date: Feb 10, 2016
+---
+
+```{r global_options, include=FALSE}
+  # use include=FALSE to have the chunk evaluated, but neither the code nor
+  # its output displayed.
+  knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE,
+                        fig.align="center", fig.width=12,fig.height=8,
+                        fig.path='Figs/')
+
+```
+
+
+
+```{r}
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(chron)
+
+rm(list=ls())
+setwd("C:/Users/lij121/Documents/R_projects/Coursera_lectures/05ReproducibilityResearch/wk1_assignment")
+invisible(gc()) # Free up memory by forcing garbage collection
+set.seed(1234)
+startTime <- Sys.time()
+company <- "Bristol-Myers Squibb Co."
+
+```
+
+
+\newpage
+
+## Code for reading in the dataset and/or processing the data
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+
+act <- read.csv("activity.csv", header = TRUE, sep = ",")
+head(act)
+tail(act)
+dim(act)
+
+act_narm <- act[!is.na(act$steps),]
+head(act_narm)
+tail(act_narm)
+dim(act_narm)
+
+```
+
+
+## Histogram of the total number of steps taken each day
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+
+actDate <- group_by(act_narm, date)
+totStepsDate <- summarise(actDate, totalSteps = sum(steps))
+
+hist(totStepsDate$totalSteps, main = "Histogram of Total Steps Per Day", 
+     xlab = "Steps Per Day", breaks = 10, col = "grey")
+# or use aggregate()
+summary(totStepsDate)
+
+```
+
+
+## Mean and median number of steps taken each day
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+
+meanStepsDate = mean(totStepsDate$totalSteps)
+medianStepsDate = median(totStepsDate$totalSteps)
+
+# or try this
+totStepsDate_na = summarise(group_by(act, date), totalSteps = sum(steps)) 
+mean_na = mean(totStepsDate_na$totalSteps, na.rm = TRUE)
+median_na = median(totStepsDate_na$totalSteps, na.rm = TRUE)
+
+```
+
+
+## Time series plot of the average number of steps taken
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+
+averageSteps = summarise(group_by(act_narm, date), aveSteps = mean(steps))
+par(mfrow=c(1, 1))
+plot.ts(averageSteps$date, averageSteps$aveSteps, main = "Time Series of the average number of steps taken", 
+        xlab = "Time", ylab= "Average Steps")
+
+```
+
+
+## The 5-minute interval that, on average, contains the maximum number of steps
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+
+averageSteps_int = summarise(group_by(act_narm, interval), aveSteps = mean(steps))
+plot(averageSteps_int, type = "l", main = "Time Series of the average number of steps taken", 
+     xlab = "Time", ylab= "Average Steps")
+summary(averageSteps_int$aveSteps) #orto find out at exact interval
+max = averageSteps_int[which.max(averageSteps_int$aveSteps), ]
+
+```
+
+
+## Code to describe and show a strategy for imputing missing data
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+
+for(cell in names(act)) {
+    missing <- sum(is.na(act[,cell]))
+    if (missing > 0) {
+        print(c(cell,missing))
+    }
+}
+
+#simple way
+total_NA = sum(is.na(act$steps))
+
+# Devise a strategy for filling in all of the missing values in the dataset. Use the mean for that 
+# 5-minute interval
+
+# 1) make a copy of the original data.frame "act"
+# 2) find the index of the missing "step"
+# 3) find the corresponding "interval" value, subsetting
+# 4) assign the average interval value  "aveSteps" to the missing step in the new table
+
+act_new <- act
+for (i in 1:nrow(act_new)) {
+  if (is.na(act_new$steps[i])) {
+    #interval_value <- act_new$interval[i]
+    steps_value <- averageSteps_int[averageSteps_int$interval == act_new$interval[i],]
+    act_new$steps[i] <- steps_value$aveSteps
+  }
+}
+
+```
+
+
+## Histogram of the total number of steps taken each day after missing values are imputed
+
+Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? 
+What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+
+actDate_new <- group_by(act_new, date)
+totStepsDate_new <- summarise(actDate_new, totalSteps_new = sum(steps))
+
+par(mfrow=c(1, 2))
+
+hist(totStepsDate_new$totalSteps_new, main = "Histogram of Total Steps Per Day, Missing Val Imputed", xlab = "Steps Per Day", breaks = 10, col = "green", ylim = c(0, 30))
+
+hist(totStepsDate$totalSteps, main = "Histogram of Total Steps Per Day", xlab = "Steps Per Day", breaks = 10, col = "grey" , ylim = c(0, 30))
+
+summary(totStepsDate_new$totalSteps_new)
+mean(totStepsDate_new$totalSteps_new)
+median(totStepsDate_new$totalSteps_new)
+
+# With missing value imputed, the histogram of the total number of steps taken each day is differ 
+# from the estimates from the first part of the assignment
+
+# The impact of imputing missing data on the estimates of the total daily number of steps: mean and median 
+# of total number of steps per day are the same
+
+```
+
+
+## Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+
+act_new$weekend = chron::is.weekend(act_new$date)
+act_new_wkend = act_new[act_new$weekend == "TRUE",]
+act_new_wkday = act_new[act_new$weekend == "FALSE",]
+total = sum(count(act_new_wkday), count(act_new_wkend))
+
+aveStepsWkend = summarise(group_by(act_new_wkend, interval), aveStepsWkend = mean(steps))
+aveStepsWkday = summarise(group_by(act_new_wkday, interval), aveStepsWkday = mean(steps))
+
+par(mfrow=c(1, 2))
+
+plot(aveStepsWkend, type = "l", main = "Time Series of the average number of steps taken on wkend", 
+     xlab = "weekend", ylab= "Average Steps")
+plot(aveStepsWkday, type = "l", main = "Time Series of the average number of steps taken on wkday", 
+     xlab = "weekday", ylab= "Average Steps")
+
+```
+
+## System Information
+
+***Time required to process this report:*** *`r format(Sys.time() - startTime)`*
+
+***R session information:***
+
+```{r, echo_session_info}
+sessionInfo()
+```
+
+```
